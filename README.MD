@@ -13,7 +13,7 @@ Planen er å lage en liten applikasjon som kan snurres igang for å overføre tr
   "SbankenSettings:Secret": "XXXXXX",
   "SbankenSettings:CustomerId": "XXXXXX",
   "SbankenSettings:ClientId": "XXXXXX",
-  "Sbanken:MainAccountId": "XXXXXX"
+  "SbankenSettings:MainAccountId": "XXXXXX"
 }
 ```
 
