@@ -124,7 +124,7 @@ namespace SbankenYNAB
 			var spesificAccountResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Accounts/{accountsList.Items[0].AccountId}");
 			var spesificAccountResult = await spesificAccountResponse.Content.ReadAsStringAsync();
 
-			var accountTransactionsResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Transactions/{mainAccountId}");
+			var accountTransactionsResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Transactions/{mainAccountId}?length=250");
 			var accountTransactionsResult = await accountTransactionsResponse.Content.ReadAsStringAsync();
 			var transactionsList = JsonConvert.DeserializeObject<WrapperList<Transaction>>(accountTransactionsResult);
 
