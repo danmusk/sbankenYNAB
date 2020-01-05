@@ -135,7 +135,6 @@ namespace SbankenYNAB
 				Console.WriteLine($"Text:{transaction.Text}\nOriginalText: {transaction.OriginalText}\nAmount: {transaction.Amount}");
 			}
 
-			Console.ReadKey();
 
             // YNAB
             var ynabSettings = services.GetService<IOptions<YNABSettings>>();
@@ -184,7 +183,7 @@ namespace SbankenYNAB
 
 						var createTransaction = await ynabApi.Transactions.CreateTransactionAsync(budgetId, addTransaction);
 
-						col.Insert(transaction);
+                        col.Insert(transaction);
 
 						Console.WriteLine($"Transaction transfered: {transaction.AccountingDate:O}: {transaction.Text} - {transaction.Amount}");
 					}
@@ -195,8 +194,6 @@ namespace SbankenYNAB
 				}
 			}
 			Console.WriteLine("Done...");
-
-			Console.ReadKey();
 		}
 	}
 
