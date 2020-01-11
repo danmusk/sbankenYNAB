@@ -1,4 +1,4 @@
-﻿namespace SbankenYNAB
+namespace SbankenYNAB
 {
     public class YNABSettings
     {

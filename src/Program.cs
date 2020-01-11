@@ -146,16 +146,16 @@ namespace SbankenYNAB
 				Console.WriteLine($"Budget Name: {budget.Name}");
 			});
 
-			var budgetId = budgetsResponse.Data.Budgets.First().Id.ToString();
+			var budgetId = budgetsResponse.Data.Budgets.First(x => x.Name == "FOV27").Id.ToString();
 			var accountsResponse = await ynabApi.Accounts.GetAccountsAsync(budgetId);
 			accountsResponse.Data.Accounts.ForEach(account =>
 			{
 				Console.WriteLine($"Account Name: {account.Name}");
 			});
 
-			var accountId = accountsResponse.Data.Accounts.First(x => x.Name == "Regningskonto").Id;
+			var accountId = accountsResponse.Data.Accounts.First(x => x.Name.Contains("Regningskonto")).Id;
 
-			using (var db = new LiteDatabase(@"SbankenYNAB.db"))
+			using (var db = new LiteDatabase(@"C:\ProgramData\SbankenYNAB\SbankenYNAB.db"))
 			{
 				// Get a collection (or create, if doesn't exist)
 				var col = db.GetCollection<Transaction>("transactions");
@@ -174,14 +174,15 @@ namespace SbankenYNAB
 									accountId,
 									transaction.AccountingDate,
 									milliUnitLong,
-									cleared: SaveTransaction.ClearedEnum.Cleared,
+									cleared: SaveTransaction.ClearedEnum.Uncleared,
 									flagColor: milliUnitLong >= 0
 										? SaveTransaction.FlagColorEnum.Green
 										: (SaveTransaction.FlagColorEnum?)null,
-									payeeName: transaction.Text
-									));
+									payeeName: transaction.Text,
+                                    memo: transaction.IsReservation ? "Reservert" : null
+                                ));
 
-						var createTransaction = await ynabApi.Transactions.CreateTransactionAsync(budgetId, addTransaction);
+                        await ynabApi.Transactions.CreateTransactionAsync(budgetId, addTransaction);
 
                         col.Insert(transaction);
 
@@ -221,6 +222,7 @@ namespace SbankenYNAB
 		public int Id { get; set; }
 		public DateTime AccountingDate { get; set; }
 		public double Amount { get; set; }
+		public bool IsReservation { get; set; }
 		public string OriginalText => _text;
 		public string Text
 		{
