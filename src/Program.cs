@@ -177,9 +177,8 @@ namespace SbankenYNAB
 									cleared: SaveTransaction.ClearedEnum.Uncleared,
 									flagColor: milliUnitLong >= 0
 										? SaveTransaction.FlagColorEnum.Green
-										: (SaveTransaction.FlagColorEnum?)null,
-									payeeName: transaction.Text,
-                                    memo: transaction.IsReservation ? "Reservert" : null
+										: (SaveTransaction.FlagColorEnum?) null,
+									payeeName: transaction.Text
                                 ));
 
                         await ynabApi.Transactions.CreateTransactionAsync(budgetId, addTransaction);
