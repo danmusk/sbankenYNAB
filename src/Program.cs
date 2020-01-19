@@ -159,14 +159,19 @@ namespace SbankenYNAB
 			{
 				// Get a collection (or create, if doesn't exist)
 				var col = db.GetCollection<Transaction>("transactions");
-				col.EnsureIndex(x => x.HashCode);
+				col.EnsureIndex(t => t.HashCode);
 
 				// LOOP
-				foreach (var transaction in transactionsList.Items)
+                var readyTransactions = transactionsList.Items.Where(t => !t.IsReservation).ToList();
+				foreach (var transaction in readyTransactions)
 				{
-					var r = col.FindOne(x => x.HashCode.Equals(transaction.HashCode));
+					var r = col.FindOne(t => t.HashCode.Equals(transaction.HashCode));
 					if (r == null)
 					{
+                        if (transaction.Text.Contains("Avtalegiro"))
+                        {
+                            break; // Avtalegiro gir ingen verdi... Vent til den er klar fra nettbanken
+                        }
 						var milliUnitLong = long.Parse(transaction.Amount.ToMilliUnit());
 						var addTransaction =
 							new SaveTransactionsWrapper(
