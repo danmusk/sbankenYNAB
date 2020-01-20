@@ -146,14 +146,14 @@ namespace SbankenYNAB
 				Console.WriteLine($"Budget Name: {budget.Name}");
 			});
 
-			var budgetId = budgetsResponse.Data.Budgets.First(x => x.Name == "FOV27").Id.ToString();
+			var budgetId = budgetsResponse.Data.Budgets.First(b => b.Name.Contains("FOV27")).Id.ToString();
 			var accountsResponse = await ynabApi.Accounts.GetAccountsAsync(budgetId);
 			accountsResponse.Data.Accounts.ForEach(account =>
 			{
 				Console.WriteLine($"Account Name: {account.Name}");
 			});
 
-			var accountId = accountsResponse.Data.Accounts.First(x => x.Name.Contains("Regningskonto")).Id;
+			var accountId = accountsResponse.Data.Accounts.First(a => a.Name.Contains("Regningskonto")).Id;
 
 			using (var db = new LiteDatabase(@"C:\ProgramData\SbankenYNAB\SbankenYNAB.db"))
 			{
@@ -162,17 +162,14 @@ namespace SbankenYNAB
 				col.EnsureIndex(t => t.HashCode);
 
 				// LOOP
-                var readyTransactions = transactionsList.Items.Where(t => !t.IsReservation).ToList();
-				foreach (var transaction in readyTransactions)
+                var transactionsNotReadyForTransfer = transactionsList.Items.Where(t => !t.ReadyForTransfer).ToList();
+                var transactionsReadyForTransfer = transactionsList.Items.Where(t => t.ReadyForTransfer).ToList();
+				foreach (var transaction in transactionsReadyForTransfer)
 				{
 					var r = col.FindOne(t => t.HashCode.Equals(transaction.HashCode));
 					if (r == null)
 					{
-                        if (transaction.Text.Contains("Avtalegiro"))
-                        {
-                            break; // Avtalegiro gir ingen verdi... Vent til den er klar fra nettbanken
-                        }
-						var milliUnitLong = long.Parse(transaction.Amount.ToMilliUnit());
+                        var milliUnitLong = long.Parse(transaction.Amount.ToMilliUnit());
 						var addTransaction =
 							new SaveTransactionsWrapper(
 								new SaveTransaction(
@@ -227,7 +224,29 @@ namespace SbankenYNAB
 		public DateTime AccountingDate { get; set; }
 		public double Amount { get; set; }
 		public bool IsReservation { get; set; }
-		public string OriginalText => _text;
+
+        public bool ReadyForTransfer
+        {
+            get
+            {
+                if (IsReservation)
+                {
+                    return false;
+                }
+                if (Text == "Nettbank"
+                    || Text == "Overførsel"
+                    || Text == "Nettgiro"
+                    || Text == "Straksoverføring"
+                    || Text == "Overført Til Annen Konto"
+                    || Text == "Efaktura Avtalegiro")
+                {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        public string OriginalText => _text;
 		public string Text
 		{
 			get
