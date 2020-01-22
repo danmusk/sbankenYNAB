@@ -237,6 +237,7 @@ namespace SbankenYNAB
                     || Text == "Overførsel"
                     || Text == "Nettgiro"
                     || Text == "Straksoverføring"
+                    || Text == "Avtalegiro"
                     || Text == "Overført Til Annen Konto"
                     || Text == "Efaktura Avtalegiro")
                 {
@@ -258,12 +259,13 @@ namespace SbankenYNAB
 					.Replace("*4137", "")
 					.Replace("NOK", "")
 					.Replace("SEK", "")
-					.Replace("Betalt:", "")
+					.Replace("Betalt", "")
 					.Replace(Math.Abs(Amount).ToString("F").Replace(",", "."), "")
-					.Replace("Til:", "")
-					.Replace("Fra:", "")
-					.Replace("Kurs:", "")
-					.Replace("1.0000", "");
+					.Replace("Til", "")
+					.Replace("Fra", "")
+					.Replace("Kurs", "")
+					.Replace("1.0000", "")
+					.Replace(":", "");
 
 				// dd.mm.yy
 				var regex = new Regex(@"(([0-9]{2}).([0-9]{2}).([0-9]{2}))");
