@@ -239,6 +239,7 @@ namespace SbankenYNAB
                     || Text == "Straksoverføring"
                     || Text == "Avtalegiro"
                     || Text == "Overført Til Annen Konto"
+                    || Text == "Efaktura Nettbank M/Kid"
                     || Text == "Efaktura Avtalegiro")
                 {
                     return false;
