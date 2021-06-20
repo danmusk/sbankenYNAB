@@ -51,14 +51,11 @@ namespace SbankenYNAB
             var sbankenSettings = services.GetService<IOptions<SbankenSettings>>();
             var clientId = sbankenSettings.Value.ClientId;
 			var secret = sbankenSettings.Value.Secret;
-			var customerId = sbankenSettings.Value.CustomerId;
-			var mainAccountId = sbankenSettings.Value.MainAccountId;
+			var regningsKontoAccountId = sbankenSettings.Value.MainAccountId;
 
 			/** Setup constants */
 			var discoveryEndpoint = "https://auth.sbanken.no/identityserver";
-			var apiBaseAddress = "https://api.sbanken.no";
-			var bankBasePath = "/exec.bank";
-			var customersBasePath = "/exec.customers";
+			var apiBaseAddress = "https://publicapi.sbanken.no/apibeta";
 
 			/**
 			 * Connect to Sbanken
@@ -67,74 +64,58 @@ namespace SbankenYNAB
 			 */
 
 			// First: get the OpenId configuration from Sbanken.
-			var discoClient = new DiscoveryClient(discoveryEndpoint);
+			var discoHttpClient = new HttpClient();
+            var discoveryDocumentResponse = await discoHttpClient.GetDiscoveryDocumentAsync(discoveryEndpoint);
 
-			var x = discoClient.Policy = new DiscoveryPolicy()
-			{
-				ValidateIssuerName = false,
-			};
+            if (discoveryDocumentResponse.Error != null)
+            {
+                throw new Exception(discoveryDocumentResponse.Error);
+            }
 
-			var discoResult = await discoClient.GetAsync();
-
-			if (discoResult.Error != null)
-			{
-				throw new Exception(discoResult.Error);
-			}
-
-			// The application now knows how to talk to the token endpoint.
+            var tokenClient = new HttpClient();
 
 			// Second: the application authenticates against the token endpoint
-			var tokenClient = new TokenClient(discoResult.TokenEndpoint, clientId, secret);
+            var tokenRequest = new ClientCredentialsTokenRequest()
+            {
+                Address = discoveryDocumentResponse.TokenEndpoint,
+                ClientId = clientId,
+                ClientSecret = secret
+            };
 
-			var tokenResponse = tokenClient.RequestClientCredentialsAsync().Result;
+            var tokenResponse = await tokenClient.RequestClientCredentialsTokenAsync(tokenRequest);
 
 			if (tokenResponse.IsError)
 			{
-				throw new Exception(tokenResponse.ErrorDescription);
+				throw new Exception(tokenResponse.Error);
 			}
 
 			// The application now has an access token.
 
-			var httpClient = new HttpClient()
+			var sBankenHttpClient = new HttpClient()
 			{
-				BaseAddress = new Uri(apiBaseAddress),
-				DefaultRequestHeaders =
-				{
-					{ "customerId", customerId }
-				}
+				BaseAddress = new Uri(apiBaseAddress)
 			};
 
 			// Finally: Set the access token on the connecting client.
 			// It will be used with all requests against the API endpoints.
-			httpClient.SetBearerToken(tokenResponse.AccessToken);
+			sBankenHttpClient.SetBearerToken(tokenResponse.AccessToken);
 
-			// The application retrieves the customer's information.
-			var customerResponse = await httpClient.GetAsync($"{customersBasePath}/api/v1/Customers");
-			var customerResult = await customerResponse.Content.ReadAsStringAsync();
-
-			Console.WriteLine($"CustomerResult:{customerResult}");
-
-			// The application retrieves the customer's accounts.
-			var accountResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Accounts");
-			var accountResult = await accountResponse.Content.ReadAsStringAsync();
-			var accountsList = JsonConvert.DeserializeObject<AccountsList>(accountResult);
-
-			Console.WriteLine($"AccountResult:{accountResult}");
-
-			var spesificAccountResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Accounts/{accountsList.Items[0].AccountId}");
-			var spesificAccountResult = await spesificAccountResponse.Content.ReadAsStringAsync();
-
-			var accountTransactionsResponse = await httpClient.GetAsync($"{bankBasePath}/api/v1/Transactions/{mainAccountId}?length=250");
+			var accountTransactionsResponse = await sBankenHttpClient.GetAsync($"/apibeta/api/v2/Transactions/archive/{regningsKontoAccountId}?length=50");
 			var accountTransactionsResult = await accountTransactionsResponse.Content.ReadAsStringAsync();
-			var transactionsList = JsonConvert.DeserializeObject<WrapperList<Transaction>>(accountTransactionsResult);
+			var transactionsListWrapper = JsonConvert.DeserializeObject<WrapperList<Transaction>>(accountTransactionsResult);
+			var transactionsList = transactionsListWrapper.Items.ToList();
 
-			Console.WriteLine($"accountTransactionsResult:{accountTransactionsResult}");
+			//Console.WriteLine($"accountTransactionsResult:{accountTransactionsResult}");
 
-			foreach (var transaction in transactionsList.Items)
+			foreach (var transaction in transactionsList)
 			{
-				Console.WriteLine($"Text:{transaction.Text}\nOriginalText: {transaction.OriginalText}\nAmount: {transaction.Amount}");
+				Console.WriteLine($@"
+TransactionId: {transaction.TransactionId}
+Date: {transaction.AccountingDate:dd.MM.yyyy}
+Text: {transaction.Text}
+OriginalText: {transaction.OriginalText}
+Amount: {transaction.Amount}");
 			}
-
 
             // YNAB
             var ynabSettings = services.GetService<IOptions<YNABSettings>>();
@@ -159,14 +140,12 @@ namespace SbankenYNAB
 			{
 				// Get a collection (or create, if doesn't exist)
 				var col = db.GetCollection<Transaction>("transactions");
-				col.EnsureIndex(t => t.HashCode);
+				col.EnsureIndex(t => t.TransactionId);
 
 				// LOOP
-                var transactionsNotReadyForTransfer = transactionsList.Items.Where(t => !t.ReadyForTransfer).ToList();
-                var transactionsReadyForTransfer = transactionsList.Items.Where(t => t.ReadyForTransfer).ToList();
-				foreach (var transaction in transactionsReadyForTransfer)
+				foreach (var transaction in transactionsList)
 				{
-					var r = col.FindOne(t => t.HashCode.Equals(transaction.HashCode));
+					var r = col.FindOne(t => t.TransactionId.Equals(transaction.TransactionId));
 					if (r == null)
 					{
                         var milliUnitLong = long.Parse(transaction.Amount.ToMilliUnit());
@@ -180,18 +159,19 @@ namespace SbankenYNAB
 									flagColor: milliUnitLong >= 0
 										? SaveTransaction.FlagColorEnum.Green
 										: (SaveTransaction.FlagColorEnum?) null,
-									payeeName: transaction.Text
+									payeeName: transaction.Text,
+                                    importId: transaction.TransactionId
                                 ));
 
                         await ynabApi.Transactions.CreateTransactionAsync(budgetId, addTransaction);
 
                         col.Insert(transaction);
 
-						Console.WriteLine($"Transaction transfered: {transaction.AccountingDate:O}: {transaction.Text} - {transaction.Amount}");
+						Console.WriteLine($"Transaction transferred: {transaction.AccountingDate:O}: {transaction.Text} - {transaction.Amount}");
 					}
 					else
 					{
-						Console.WriteLine($"Transaction already transfered: {transaction.AccountingDate:O}: {transaction.Text} - {transaction.Amount}");
+						Console.WriteLine($"Transaction already transferred: {transaction.AccountingDate:O}: {transaction.Text} - {transaction.Amount}");
 					}
 				}
 			}
@@ -220,33 +200,9 @@ namespace SbankenYNAB
 	public class Transaction
 	{
 		private string _text;
-		public int Id { get; set; }
+		public string TransactionId { get; set; }
 		public DateTime AccountingDate { get; set; }
 		public double Amount { get; set; }
-		public bool IsReservation { get; set; }
-
-        public bool ReadyForTransfer
-        {
-            get
-            {
-                if (IsReservation)
-                {
-                    return false;
-                }
-                if (Text == "Nettbank"
-                    || Text == "Overførsel"
-                    || Text == "Nettgiro"
-                    || Text == "Straksoverføring"
-                    || Text == "Avtalegiro"
-                    || Text == "Overført Til Annen Konto"
-                    || Text == "Efaktura Nettbank M/Kid"
-                    || Text == "Efaktura Avtalegiro")
-                {
-                    return false;
-                }
-                return true;
-            }
-        }
 
         public string OriginalText => _text;
 		public string Text
@@ -255,10 +211,11 @@ namespace SbankenYNAB
 			{
 				var result = _text;
 
-				result = result
+				result = result.ToLower()
 					.Replace("*7424", "")
 					.Replace("*4137", "")
-					.Replace("NOK", "")
+					.Replace("nok", "")
+					.Replace(".no", "")
 					.Replace("SEK", "")
 					.Replace("Betalt", "")
 					.Replace(Math.Abs(Amount).ToString("F").Replace(",", "."), "")
@@ -296,22 +253,5 @@ namespace SbankenYNAB
 			}
 			set => _text = value;
 		}
-
-		public string HashCode => GetStringSha256Hash($"{this.AccountingDate:O}-{this.OriginalText}-{this.Amount}");
-
-		public static string GetStringSha256Hash(string text)
-		{
-			if (String.IsNullOrEmpty(text))
-				return String.Empty;
-
-			using (var sha = new System.Security.Cryptography.SHA256Managed())
-			{
-				byte[] textData = System.Text.Encoding.UTF8.GetBytes(text);
-				byte[] hash = sha.ComputeHash(textData);
-				return BitConverter.ToString(hash).Replace("-", String.Empty);
-			}
-		}
-	}
+    }
 }
-
-
