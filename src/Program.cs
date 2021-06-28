@@ -100,22 +100,22 @@ namespace SbankenYNAB
 			// It will be used with all requests against the API endpoints.
 			sBankenHttpClient.SetBearerToken(tokenResponse.AccessToken);
 
-			var accountTransactionsResponse = await sBankenHttpClient.GetAsync($"/apibeta/api/v2/Transactions/archive/{regningsKontoAccountId}?length=50");
+			var accountTransactionsResponse = await sBankenHttpClient.GetAsync($"/apibeta/api/v2/Transactions/archive/{regningsKontoAccountId}?length=200");
 			var accountTransactionsResult = await accountTransactionsResponse.Content.ReadAsStringAsync();
 			var transactionsListWrapper = JsonConvert.DeserializeObject<WrapperList<Transaction>>(accountTransactionsResult);
-			var transactionsList = transactionsListWrapper.Items.ToList();
+			var transactionsList = transactionsListWrapper.Items.OrderByDescending(x => x.AccountingDate).ToList();
 
 			//Console.WriteLine($"accountTransactionsResult:{accountTransactionsResult}");
 
-			foreach (var transaction in transactionsList)
-			{
-				Console.WriteLine($@"
-TransactionId: {transaction.TransactionId}
-Date: {transaction.AccountingDate:dd.MM.yyyy}
-Text: {transaction.Text}
-OriginalText: {transaction.OriginalText}
-Amount: {transaction.Amount}");
-			}
+//			foreach (var transaction in transactionsList)
+//			{
+//				Console.WriteLine($@"
+//TransactionId: {transaction.TransactionId}
+//Date: {transaction.AccountingDate:dd.MM.yyyy}
+//Text: {transaction.Text}
+//OriginalText: {transaction.OriginalText}
+//Amount: {transaction.Amount}");
+//			}
 
             // YNAB
             var ynabSettings = services.GetService<IOptions<YNABSettings>>();
